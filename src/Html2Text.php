@@ -223,8 +223,7 @@ class Html2Text {
 	 */
 	private static function renderText(string $text): string {
 		$text = str_replace(self::nbspCodes(), " ", $text);
-		$text = str_replace(self::zwnjCodes(), "", $text);
-		return $text;
+		return str_replace(self::zwnjCodes(), "", $text);
 	}
 
 	private static function nextChildName(?\DOMNode $node): ?string {
@@ -246,7 +245,7 @@ class Html2Text {
 
 		$nextName = null;
 		if (($nextNode instanceof \DOMElement || $nextNode instanceof \DOMText) && $nextNode != null) {
-			$nextName = strtolower($nextNode->nodeName);
+			return strtolower($nextNode->nodeName);
 		}
 
 		return $nextName;
@@ -427,8 +426,9 @@ class Html2Text {
 				break;
 
 			case "br":
+            case "li":
 				// add one line
-				$output .= "\n";
+                $output .= "\n";
 				break;
 
 			case "div":
@@ -509,10 +509,6 @@ class Html2Text {
 				} else {
 					$output = "";
 				}
-				break;
-
-			case "li":
-				$output .= "\n";
 				break;
 
 			case "blockquote":
