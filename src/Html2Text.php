@@ -213,7 +213,7 @@ class Html2Text
             $load_result = $doc->loadHTML($header . $html, LIBXML_NOWARNING | LIBXML_NOERROR | LIBXML_NONET | LIBXML_PARSEHUGE);
             libxml_use_internal_errors($old_internal_errors);
         } else {
-            $load_result = $doc->loadHTML($header . $html);
+            $load_result = $doc->loadHTML($header . $html, LIBXML_NONET);
         }
 
         if (!$load_result) {
