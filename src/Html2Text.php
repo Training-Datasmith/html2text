@@ -5,7 +5,16 @@ namespace Soundasleep;
 
 class Html2Text
 {
-    /** @return array<string, bool | string> */
+    /**
+     * Returns the default option values for convert().
+     *
+     * Options:
+     * - `ignore_errors` (bool)   — suppress libxml parsing errors; default false.
+     * - `drop_links`    (bool)   — omit link hrefs from text output; default false.
+     * - `char_set`      (string) — character set passed to DOMDocument::loadHTML; 'auto' detects from HTML.
+     *
+     * @return array<string, bool|string>
+     */
     public static function default_options(): array
     {
         return ['ignore_errors' => false, 'drop_links' => false, 'char_set' => 'auto'];
