@@ -33,8 +33,11 @@ $siteAllow = [
     ],
     'tests/Html2Text_Test.php' => [
         '' => ['PHPUnit', 'Framework', 'TestCase', 'setUpBeforeClass'],
-        'setUpBeforeClass' => ['DirectoryIterator', 'getFileName', 'getPathname', 'AssertionFailedError', 'setUpBeforeClass'],
-        'test_file' => ['dataProvider', 'provider_files'],
+        'setUpBeforeClass' => [
+            'DirectoryIterator', 'getFileName', 'getPathname', 'AssertionFailedError', 'setUpBeforeClass',
+            'PHPUnit', 'Framework',
+        ],
+        'test_file' => ['dataProvider'],
         'do_test_with_results' => ['assertTrue', 'assertEquals'],
         'test_invalid_xml' => ['expectWarning'],
         'test_invalid_option' => ['expectException', 'InvalidArgumentException'],
@@ -98,6 +101,33 @@ function rel_path(string $root, string $path): string
     return $path;
 }
 
+function code_without_comments(string $content): string
+{
+    $content = preg_replace('~/\*.*?\*/~s', ' ', $content) ?? $content;
+    $content = preg_replace('~//[^\n]*~', ' ', $content) ?? $content;
+
+    return $content;
+}
+
+/**
+ * @param list<array{0: string, 1: int}> $functions
+ */
+function function_at_offset(array $functions, int $offset): string
+{
+    if ($functions === [] || $offset < $functions[0][1]) {
+        return '';
+    }
+
+    $current = '';
+    foreach ($functions as $fn) {
+        if ($fn[1] <= $offset) {
+            $current = $fn[0];
+        }
+    }
+
+    return $current;
+}
+
 /**
  * @param array<string, array<string, list<string>>> $siteAllow
  * @return list<string>
@@ -111,15 +141,15 @@ function scan_content(string $rel, string $content, array $siteAllow, array $old
         }
     }
 
-    $currentFunction = '';
-    if (preg_match_all('/\bfunction\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/', $content, $fnMatches, PREG_OFFSET_CAPTURE)) {
+    $code = code_without_comments($content);
+    if (preg_match_all('/\bfunction\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/', $code, $fnMatches, PREG_OFFSET_CAPTURE)) {
         $functions = $fnMatches[1];
     } else {
         $functions = [];
     }
 
     $camelPattern = '/\b([a-z][a-z0-9_]*[A-Z][A-Za-z0-9_]*)\b/';
-    if (!preg_match_all($camelPattern, $content, $camelMatches, PREG_OFFSET_CAPTURE)) {
+    if (!preg_match_all($camelPattern, $code, $camelMatches, PREG_OFFSET_CAPTURE)) {
         return $errors;
     }
 
@@ -131,44 +161,69 @@ function scan_content(string $rel, string $content, array $siteAllow, array $old
             continue;
         }
         $offset = $match[1];
-        $currentFunction = '';
-        foreach ($functions as $fn) {
-            if ($fn[1] <= $offset) {
-                $currentFunction = $fn[0];
-            }
-        }
+        $currentFunction = function_at_offset($functions, $offset);
 
-        $allowed = false;
-        if (isset($siteAllow[$rel])) {
-            $scopes = [$currentFunction, ''];
-            foreach ($scopes as $scope) {
-                if (!isset($siteAllow[$rel][$scope])) {
-                    continue;
-                }
-                foreach ($siteAllow[$rel][$scope] as $permitted) {
-                    if ($token === $permitted || strpos($token, $permitted) !== false) {
-                        $allowed = true;
-                        break 2;
-                    }
-                }
-            }
-            // Allow DOM* / assert* prefixes when whole token is third-party symbol in allow list
-            if (!$allowed) {
-                foreach ($siteAllow[$rel] as $scope => $symbols) {
-                    if (in_array($token, $symbols, true)) {
-                        $allowed = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!$allowed) {
+        if (!is_symbol_allowed_at_site($rel, $currentFunction, $token, $siteAllow)) {
             $errors[] = "{$rel}: camelCase repo-owned identifier '{$token}' (near function {$currentFunction})";
         }
     }
 
+    if (isset($siteAllow[$rel])) {
+        $symbols = site_allowed_symbols($siteAllow[$rel]);
+        foreach ($symbols as $symbol) {
+            $pattern = '/(?<![a-zA-Z0-9_])' . preg_quote($symbol, '/') . '(?![a-zA-Z0-9_])/';
+            if (!preg_match_all($pattern, $code, $symbolMatches, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+            foreach ($symbolMatches[0] as $symbolMatch) {
+                $offset = $symbolMatch[1];
+                $currentFunction = function_at_offset($functions, $offset);
+                if (!is_symbol_allowed_at_site($rel, $currentFunction, $symbol, $siteAllow)) {
+                    $errors[] = "{$rel}: third-party identifier '{$symbol}' outside allowed site (near function {$currentFunction})";
+                }
+            }
+        }
+    }
+
     return $errors;
+}
+
+/**
+ * @param array<string, list<string>> $fileAllow
+ * @return list<string>
+ */
+function site_allowed_symbols(array $fileAllow): array
+{
+    $symbols = [];
+    foreach ($fileAllow as $scopeSymbols) {
+        foreach ($scopeSymbols as $symbol) {
+            $symbols[$symbol] = true;
+        }
+    }
+
+    return array_keys($symbols);
+}
+
+/**
+ * @param array<string, array<string, list<string>>> $siteAllow
+ */
+function is_symbol_allowed_at_site(string $rel, string $currentFunction, string $symbol, array $siteAllow): bool
+{
+    if (!isset($siteAllow[$rel])) {
+        return false;
+    }
+    if ($currentFunction !== '' && isset($siteAllow[$rel][$currentFunction])) {
+        if (in_array($symbol, $siteAllow[$rel][$currentFunction], true)) {
+            return true;
+        }
+    }
+    if ($currentFunction === '' && isset($siteAllow[$rel][''])) {
+        if (in_array($symbol, $siteAllow[$rel][''], true)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -196,6 +251,16 @@ function run_in_memory_demos(array $siteAllow): array
     $insideSnippet = "function get_document() { \$char_set = 'auto'; }";
     if (scan_content('src/Html2Text.php', $insideSnippet, $siteAllow, []) !== []) {
         $errors[] = 'demo snake_case inside get_document should pass';
+    }
+
+    $domOutsideSnippet = "function fix_newlines() { \\DOMDocument::loadHTML(''); }";
+    if (scan_content('src/Html2Text.php', $domOutsideSnippet, $siteAllow, []) === []) {
+        $errors[] = 'demo third-party DOMDocument outside get_document should fail';
+    }
+
+    $domInsideSnippet = "function get_document() { \\DOMDocument::loadHTML(''); }";
+    if (scan_content('src/Html2Text.php', $domInsideSnippet, $siteAllow, []) !== []) {
+        $errors[] = 'demo third-party DOMDocument inside get_document should pass';
     }
 
     return $errors;

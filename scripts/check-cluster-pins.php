@@ -144,7 +144,14 @@ $expected = [];
 $goodReference = str_repeat('a', 40);
 $wrongReference = str_repeat('b', 40);
 
-$demoFixturePhp = [
+$demoExpected = [
+    'demo/wrong-sha' => [
+        'alias' => '9.9.9',
+        'reference' => $goodReference,
+    ],
+];
+
+$demoFixturePhpWrong = [
     'versions' => [
         'demo/wrong-sha' => [
             'reference' => $wrongReference,
@@ -152,27 +159,40 @@ $demoFixturePhp = [
         ],
     ],
 ];
-$demoExpected = [
+$demoFixtureJsonGood = [
     'demo/wrong-sha' => [
-        'alias' => '9.9.9',
-        'reference' => $goodReference,
+        'source' => ['reference' => $goodReference],
     ],
 ];
-$phpDemoErrors = validate_installed_php($demoExpected, $demoFixturePhp['versions']);
-if ($phpDemoErrors === [] || stripos(implode(' ', $phpDemoErrors), 'installed.php') === false) {
-    fwrite(STDERR, "check-cluster-pins: wrong-SHA installed.php demo did not fail as expected.\n");
+$phpDemoErrors = validate_installed_php($demoExpected, $demoFixturePhpWrong['versions']);
+$jsonDemoPasses = validate_installed_json($demoExpected, $demoFixtureJsonGood);
+if ($phpDemoErrors === []
+    || stripos(implode(' ', $phpDemoErrors), 'installed.php') === false
+    || $jsonDemoPasses !== []) {
+    fwrite(STDERR, "check-cluster-pins: wrong-SHA installed.php demo did not fail on installed.php only.\n");
     exit(1);
 }
 fwrite(STDOUT, "check-cluster-pins: wrong-SHA installed.php failed on installed.php only\n");
 
-$demoFixtureJson = [
+$demoFixtureJsonWrong = [
     'demo/wrong-sha' => [
         'source' => ['reference' => $wrongReference],
     ],
 ];
-$jsonDemoErrors = validate_installed_json($demoExpected, $demoFixtureJson);
-if ($jsonDemoErrors === [] || stripos(implode(' ', $jsonDemoErrors), 'installed.json') === false) {
-    fwrite(STDERR, "check-cluster-pins: wrong-SHA installed.json demo did not fail as expected.\n");
+$demoFixturePhpGood = [
+    'versions' => [
+        'demo/wrong-sha' => [
+            'reference' => $goodReference,
+            'aliases' => ['9.9.9'],
+        ],
+    ],
+];
+$jsonDemoErrors = validate_installed_json($demoExpected, $demoFixtureJsonWrong);
+$phpDemoPasses = validate_installed_php($demoExpected, $demoFixturePhpGood['versions']);
+if ($jsonDemoErrors === []
+    || stripos(implode(' ', $jsonDemoErrors), 'installed.json') === false
+    || $phpDemoPasses !== []) {
+    fwrite(STDERR, "check-cluster-pins: wrong-SHA installed.json demo did not fail on installed.json only.\n");
     exit(1);
 }
 fwrite(STDOUT, "check-cluster-pins: wrong-SHA installed.json failed on installed.json only\n");
