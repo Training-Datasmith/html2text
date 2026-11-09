@@ -12,6 +12,13 @@
       "role": "Developer"
     }
   ],
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://raw.githubusercontent.com/Training-Datasmith/composer-index/remote-test-2026-11-09",
+      "canonical": false
+    }
+  ],
   "autoload": {
     "psr-4": {
       "Soundasleep\\": "src"
@@ -26,7 +33,17 @@
     "ext-libxml": "*"
   },
   "require-dev": {
-    "phpunit/phpunit": "^7.0|^8.0|^9.0",
+    "phpunit/phpunit": "^8.5.52",
     "phpstan/phpstan": "^1.9"
+  },
+  "config": {
+    "lock": false
+  },
+  "scripts": {
+    "test": [
+      "@php scripts/check-cluster-pins.php",
+      "@php scripts/check-rename.php",
+      "phpunit --colors=never --do-not-cache-result"
+    ]
   }
 }

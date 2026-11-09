@@ -2,37 +2,65 @@
 
 declare(strict_types=1);
 
-require(__DIR__ . '/../src/Html2Text.php');
+require __DIR__ . '/../src/Html2Text.php';
+require __DIR__ . '/../src/Html2Text_Exception.php';
 
-class Html2TextTest extends \PHPUnit\Framework\TestCase
+class Html2Text_Test extends \PHPUnit\Framework\TestCase
 {
-    // delete all failures before we run
     public static function setUpBeforeClass(): void
     {
-        foreach (new DirectoryIterator(__DIR__ . '/failures') as $fileInfo) {
-            if ($fileInfo->getFileName()[0] != '.') {
-                unlink($fileInfo->getPathname());
+        foreach (new DirectoryIterator(__DIR__ . '/failures') as $file_info) {
+            if ($file_info->getFileName()[0] != '.') {
+                unlink($file_info->getPathname());
             }
+        }
+
+        $nbsp = \Soundasleep\Html2Text::nbsp_codes();
+        if (count($nbsp) !== 2 || $nbsp[0] !== "\xc2\xa0") {
+            throw new \PHPUnit\Framework\AssertionFailedError('nbsp_codes must match upstream master byte sequences');
+        }
+        if ($nbsp[0] === "\xc2\xa0" && strlen($nbsp[0]) !== 2) {
+            throw new \PHPUnit\Framework\AssertionFailedError('nbsp_codes[0] must be UTF-8 nbsp bytes');
+        }
+        if ($nbsp[1] === "\xc2\xa0" && $nbsp[0] === "\xc2\xa0" && count(array_unique($nbsp)) === 1) {
+            throw new \PHPUnit\Framework\AssertionFailedError('nbsp_codes regression duplicate only');
+        }
+        if (isset($nbsp[0][0]) && $nbsp[0][0] === "\xc2" && bin2hex($nbsp[1]) === '5c7530306130' && PHP_VERSION_ID >= 80000) {
+            throw new \PHPUnit\Framework\AssertionFailedError('nbsp_codes[1] must not be a literal \\u00a0 on PHP 8+');
+        }
+        if ($nbsp[0] === "\xc2\xa0" && bin2hex($nbsp[1]) === 'a0' && strlen($nbsp[1]) === 1) {
+            throw new \PHPUnit\Framework\AssertionFailedError('nbsp_codes partial-rename regression');
+        }
+
+        $zwnj = \Soundasleep\Html2Text::zwnj_codes();
+        if (count($zwnj) !== 2 || $zwnj[0] !== "\xe2\x80\x8c") {
+            throw new \PHPUnit\Framework\AssertionFailedError('zwnj_codes must match upstream master byte sequences');
+        }
+        if (bin2hex($zwnj[1]) === '5c7532303063' && PHP_VERSION_ID >= 80000) {
+            throw new \PHPUnit\Framework\AssertionFailedError('zwnj_codes[1] must not be a literal \\u200c on PHP 8+');
+        }
+        if (strlen($zwnj[0]) !== 3) {
+            throw new \PHPUnit\Framework\AssertionFailedError('zwnj_codes[0] must be UTF-8 ZWNJ bytes');
         }
     }
 
     /**
-     * @dataProvider providerFiles
+     * @dataProvider provider_files
      */
-    public function testFile(string $test): void
+    public function test_file(string $test): void
     {
-        $this->doTestWithResults($test, $test, []);
+        $this->do_test_with_results($test, $test, []);
     }
 
-    /** @param bool | array<string, bool | string> $options */
-    public function doTestWithResults(string $test, string $result, $options = []): void
+    /** @param bool|array<string, bool|string> $options */
+    public function do_test_with_results(string $test, string $result, $options = []): void
     {
         $html = __DIR__ . "/html/$test.html";
         $txt = __DIR__ . "/txt/$result.txt";
         $this->assertTrue(file_exists($html), "File '{$html}' does not exist");
         $this->assertTrue(file_exists($txt), "File '{$txt}' does not exist");
         $input = file_get_contents($html);
-        $expected = \Soundasleep\Html2Text::fixNewlines(file_get_contents($txt));
+        $expected = \Soundasleep\Html2Text::fix_newlines(file_get_contents($txt));
 
         $output = \Soundasleep\Html2Text::convert($input, $options);
 
@@ -43,7 +71,7 @@ class Html2TextTest extends \PHPUnit\Framework\TestCase
     }
 
     /** @return array<array<string>> */
-    public function providerFiles(): array
+    public function provider_files(): array
     {
         return [
             ['basic'],
@@ -70,41 +98,40 @@ class Html2TextTest extends \PHPUnit\Framework\TestCase
         ];
     }
 
-    public function testInvalidXML(): void
+    public function test_invalid_xml(): void
     {
         $this->expectWarning();
-        $this->doTestWithResults('invalid', 'invalid', ['ignore_errors' => false]);
+        $this->do_test_with_results('invalid', 'invalid', ['ignore_errors' => false]);
     }
 
-    public function testInvalidXMLIgnore(): void
+    public function test_invalid_xml_ignore(): void
     {
-        $this->doTestWithResults('invalid', 'invalid', ['ignore_errors' => true]);
+        $this->do_test_with_results('invalid', 'invalid', ['ignore_errors' => true]);
     }
 
-    public function testInvalidXMLIgnoreOldSyntax(): void
+    public function test_invalid_xml_ignore_old_syntax(): void
     {
-        // for BC, allow old #convert(text, bool) syntax
-        $this->doTestWithResults('invalid', 'invalid', true);
+        $this->do_test_with_results('invalid', 'invalid', true);
     }
 
-    public function testInvalidOption(): void
+    public function test_invalid_option(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->doTestWithResults('basic', 'basic', ['invalid_option' => true]);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->do_test_with_results('basic', 'basic', ['invalid_option' => true]);
     }
 
-    public function testBasicDropLinks(): void
+    public function test_basic_drop_links(): void
     {
-        $this->doTestWithResults('basic', 'basic.no-links', ['drop_links' => true]);
+        $this->do_test_with_results('basic', 'basic.no-links', ['drop_links' => true]);
     }
 
-    public function testAnchorsDropLinks(): void
+    public function test_anchors_drop_links(): void
     {
-        $this->doTestWithResults('anchors', 'anchors.no-links', ['drop_links' => true]);
+        $this->do_test_with_results('anchors', 'anchors.no-links', ['drop_links' => true]);
     }
 
-    public function testWindows1252(): void
+    public function test_windows1252(): void
     {
-        $this->doTestWithResults('windows-1252-example', 'windows-1252-example', ['char_set' => 'windows-1252']);
+        $this->do_test_with_results('windows-1252-example', 'windows-1252-example', ['char_set' => 'windows-1252']);
     }
 }

@@ -3,7 +3,7 @@
 declare (strict_types=1);
 namespace Soundasleep;
 
-class Html2text_Exception extends \Exception
+class Html2Text_Exception extends \Exception
 {
     /** @var string $more_info */
     public $more_info;

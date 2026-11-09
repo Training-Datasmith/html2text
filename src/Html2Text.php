@@ -32,7 +32,7 @@ class Html2Text
      * @param string $html the input HTML
      * @param boolean|array<string, bool | string> $options if boolean, Ignore xml parsing errors, else ['ignore_errors' => false, 'drop_links' => false, 'char_set' => 'auto']
      * @return string the HTML converted, as best as possible, to text
-     * @throws Html2TextException if the HTML could not be loaded as a {@link \DOMDocument}
+     * @throws Html2Text_Exception if the HTML could not be loaded as a {@link \DOMDocument}
      */
     public static function convert(string $html, $options = []): string
     {
@@ -82,12 +82,18 @@ class Html2Text
     /** @return array<string> */
     public static function nbsp_codes(): array
     {
-        return [" ", "\\u00a0"];
+        return [
+            "\xc2\xa0",
+            "\u00a0",
+        ];
     }
     /** @return array<string> */
     public static function zwnj_codes(): array
     {
-        return ["‌", "\\u200c"];
+        return [
+            "\xe2\x80\x8c",
+            "\u200c",
+        ];
     }
     /**
      * Remove leading or trailing spaces and excess empty lines from provided multiline text
@@ -112,7 +118,7 @@ class Html2Text
         // remove trailing spaces on each line
         $text = preg_replace("/[ \t]*\n/im", "\n", $text);
         // unarmor pre blocks
-        $text = self::fix_new_lines($text);
+        $text = self::fix_newlines($text);
         // remove unnecessary empty lines
         $text = preg_replace("/\n\n\n*/im", "\n\n", $text);
         return $text;
@@ -135,9 +141,9 @@ class Html2Text
      * @param array<string, bool | string> $options
      * @return \DOMDocument the parsed document tree
      */
-    private static function get_document(string $html, array $options): \Dom_Document
+    private static function get_document(string $html, array $options): \DOMDocument
     {
-        $doc = new \Dom_Document();
+        $doc = new \DOMDocument();
         $html = trim($html);
         if (!$html) {
             // DOMDocument doesn't support empty value and throws an error
@@ -169,17 +175,17 @@ class Html2Text
             $header = '<?xml version="1.0" encoding="' . $char_set . '">';
         }
         if (!empty($options['ignore_errors'])) {
-            $doc->strict_error_checking = false;
+            $doc->strictErrorChecking = false;
             $doc->recover = true;
-            $doc->xml_standalone = true;
+            $doc->xmlStandalone = true;
             $old_internal_errors = libxml_use_internal_errors(true);
-            $load_result = $doc->load_html($header . $html, LIBXML_NOWARNING | LIBXML_NOERROR | LIBXML_NONET | LIBXML_PARSEHUGE);
+            $load_result = $doc->loadHTML($header . $html, LIBXML_NOWARNING | LIBXML_NOERROR | LIBXML_NONET | LIBXML_PARSEHUGE);
             libxml_use_internal_errors($old_internal_errors);
         } else {
-            $load_result = $doc->load_html($header . $html, LIBXML_NONET);
+            $load_result = $doc->loadHTML($header . $html, LIBXML_NONET);
         }
         if (!$load_result) {
-            throw new Html2text_Exception('Could not load HTML - badly formed?', $html);
+            throw new Html2Text_Exception('Could not load HTML - badly formed?', $html);
         }
         return $doc;
     }
@@ -196,51 +202,51 @@ class Html2Text
         $text = str_replace(self::nbsp_codes(), ' ', $text);
         return str_replace(self::zwnj_codes(), '', $text);
     }
-    private static function next_child_name(?\Dom_Node $node): ?string
+    private static function next_child_name(?\DOMNode $node): ?string
     {
         // get the next child
-        $next_node = $node->next_sibling;
+        $next_node = $node->nextSibling;
         while ($next_node != null) {
-            if ($next_node instanceof \Dom_Text) {
-                if (!self::is_whitespace($next_node->whole_text)) {
+            if ($next_node instanceof \DOMText) {
+                if (!self::is_whitespace($next_node->wholeText)) {
                     break;
                 }
             }
-            if ($next_node instanceof \Dom_Element) {
+            if ($next_node instanceof \DOMElement) {
                 break;
             }
-            $next_node = $next_node->next_sibling;
+            $next_node = $next_node->nextSibling;
         }
         $next_name = null;
-        if (($next_node instanceof \Dom_Element || $next_node instanceof \Dom_Text) && $next_node != null) {
-            return strtolower($next_node->node_name);
+        if (($next_node instanceof \DOMElement || $next_node instanceof \DOMText) && $next_node != null) {
+            return strtolower($next_node->nodeName);
         }
         return $next_name;
     }
     /** @param array<string, bool | string> $options */
-    private static function iterate_over_node(\Dom_Node $node, ?string $prev_name, bool $in_pre, bool $is_office_document, array $options): string
+    private static function iterate_over_node(\DOMNode $node, ?string $prev_name, bool $in_pre, bool $is_office_document, array $options): string
     {
-        if ($node instanceof \Dom_Text) {
+        if ($node instanceof \DOMText) {
             // Replace whitespace characters with a space (equivilant to \s)
             if ($in_pre) {
-                $text = "\n" . trim(self::render_text($node->whole_text), "\n\r\t ") . "\n";
+                $text = "\n" . trim(self::render_text($node->wholeText), "\n\r\t ") . "\n";
                 // Remove trailing whitespace only
                 $text = preg_replace("/[ \t]*\n/im", "\n", $text);
                 // armor newlines with \r.
                 return str_replace("\n", "\r", $text);
             }
-            $text = self::render_text($node->whole_text);
+            $text = self::render_text($node->wholeText);
             $text = preg_replace('/[\t\n\f\r ]+/im', ' ', $text);
             if (!self::is_whitespace($text) && ($prev_name == 'p' || $prev_name == 'div')) {
                 return "\n" . $text;
             }
             return $text;
         }
-        if ($node instanceof \Dom_Document_Type || $node instanceof \Dom_Processing_Instruction) {
+        if ($node instanceof \DOMDocumentType || $node instanceof \DOMProcessingInstruction) {
             // ignore
             return '';
         }
-        $name = strtolower($node->node_name);
+        $name = strtolower($node->nodeName);
         $next_name = self::next_child_name($node);
         // start whitespace
         switch ($name) {
@@ -278,11 +284,11 @@ class Html2Text
                 // Microsoft exchange emails often include HTML which, when passed through
                 // html2text, results in lots of double line returns everywhere.
                 //
-                // To fix this, for any p element with a className of `MsoNormal` (the standard
+                // To fix this, for any p element with a class of `MsoNormal` (the standard
                 // classname in any Microsoft export or outlook for a paragraph that behaves
                 // like a line return) we skip the first line returns and set the name to br.
                 // @phpstan-ignore-next-line
-                if ($is_office_document && $node->get_attribute('class') == 'MsoNormal') {
+                if ($is_office_document && $node->getAttribute('class') == 'MsoNormal') {
                     $output = '';
                     $name = 'br';
                     break;
@@ -310,26 +316,26 @@ class Html2Text
                 break;
         }
         // debug
-        //$output .= "[$name,$nextName]";
-        if (isset($node->child_nodes)) {
-            $n = $node->child_nodes->item(0);
+        //$output .= "[$name,$next_name]";
+        if (isset($node->childNodes)) {
+            $n = $node->childNodes->item(0);
             $previous_sibling_names = [];
             $previous_sibling_name = null;
             $parts = [];
             $trailing_whitespace = 0;
             while ($n != null) {
                 $text = self::iterate_over_node($n, $previous_sibling_name, $in_pre || $name == 'pre', $is_office_document, $options);
-                // Pass current node name to next child, as previousSibling does not appear to get populated
-                if ($n instanceof \Dom_Document_Type || $n instanceof \Dom_Processing_Instruction || $n instanceof \Dom_Text && self::is_whitespace($text)) {
-                    // Keep current previousSiblingName, these are invisible
+                // Pass current node name to next child, as previous sibling does not appear to get populated
+                if ($n instanceof \DOMDocumentType || $n instanceof \DOMProcessingInstruction || $n instanceof \DOMText && self::is_whitespace($text)) {
+                    // Keep current previous sibling name, these are invisible
                     $trailing_whitespace++;
                 } else {
-                    $previous_sibling_name = strtolower($n->node_name);
+                    $previous_sibling_name = strtolower($n->nodeName);
                     $previous_sibling_names[] = $previous_sibling_name;
                     $trailing_whitespace = 0;
                 }
-                $node->remove_child($n);
-                $n = $node->child_nodes->item(0);
+                $node->removeChild($n);
+                $n = $node->childNodes->item(0);
                 $parts[] = $text;
             }
             // Remove trailing whitespace, important for the br check below
@@ -369,28 +375,28 @@ class Html2Text
             case 'a':
                 // links are returned in [text](link) format
                 // @phpstan-ignore-next-line
-                $href = $node->get_attribute('href');
+                $href = $node->getAttribute('href');
                 $output = trim($output);
                 // remove double [[ ]] s from linking images
                 if (substr($output, 0, 1) == '[' && substr($output, -1) == ']') {
                     $output = substr($output, 1, strlen($output) - 2);
                     // for linking images, the title of the <a> overrides the title of the <img>
                     // @phpstan-ignore-next-line
-                    if ($node->get_attribute('title')) {
+                    if ($node->getAttribute('title')) {
                         // @phpstan-ignore-next-line
-                        $output = $node->get_attribute('title');
+                        $output = $node->getAttribute('title');
                     }
                 }
                 // if there is no link text, but a title attr
                 // @phpstan-ignore-next-line
-                if (!$output && $node->get_attribute('title')) {
+                if (!$output && $node->getAttribute('title')) {
                     // @phpstan-ignore-next-line
-                    $output = $node->get_attribute('title');
+                    $output = $node->getAttribute('title');
                 }
                 if ($href == null) {
                     // it doesn't link anywhere
                     // @phpstan-ignore-next-line
-                    if ($node->get_attribute('name') != null) {
+                    if ($node->getAttribute('name') != null) {
                         if ($options['drop_links']) {
                             $output = "{$output}";
                         } else {
@@ -424,13 +430,13 @@ class Html2Text
                 break;
             case 'img':
                 // @phpstan-ignore-next-line
-                if ($node->get_attribute('title')) {
+                if ($node->getAttribute('title')) {
                     // @phpstan-ignore-next-line
-                    $output = '[' . $node->get_attribute('title') . ']';
+                    $output = '[' . $node->getAttribute('title') . ']';
                     // @phpstan-ignore-next-line
-                } elseif ($node->get_attribute('alt')) {
+                } elseif ($node->getAttribute('alt')) {
                     // @phpstan-ignore-next-line
-                    $output = '[' . $node->get_attribute('alt') . ']';
+                    $output = '[' . $node->getAttribute('alt') . ']';
                 } else {
                     $output = '';
                 }

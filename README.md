@@ -85,7 +85,7 @@ $text = \Soundasleep\Html2Text::convert($html, $options);
 
 ## Tests
 
-Some very basic tests are provided in the `tests/` directory. Run them with `composer install && vendor/bin/phpunit`.
+Some very basic tests are provided in the `tests/` directory. Run the strict system test with `scripts/system-test.sh` (digest-pinned PHP 7.3, checksum-verified Composer).
 
 ## Troubleshooting
 

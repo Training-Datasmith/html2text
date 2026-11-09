@@ -5,3 +5,5 @@ vendor/
 **/*.DS_Store
 .phpunit.result.cache
 composer.lock
+.system-test/
+.baseline-master-worktree/

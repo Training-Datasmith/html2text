@@ -6,8 +6,8 @@ declare(strict_types=1);
  * autoloading classes.
  */
 
-require_once(__DIR__ . '/src/Html2Text.php');
-require_once(__DIR__ . '/src/Html2TextException.php');
+require_once __DIR__ . '/src/Html2Text.php';
+require_once __DIR__ . '/src/Html2Text_Exception.php';
 
 function convert_html_to_text($html, $ignore_error = false)
 {
@@ -16,5 +16,5 @@ function convert_html_to_text($html, $ignore_error = false)
 
 function fix_newlines($text)
 {
-    return Soundasleep\Html2Text::fixNewlines($text);
+    return Soundasleep\Html2Text::fix_newlines($text);
 }
